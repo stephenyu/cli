@@ -137,17 +137,24 @@ func titleBodySurvey(cmd *cobra.Command, providedTitle, providedBody string, def
 		inProgress.Body = templateContents
 	}
 
-	wantsExtraFields := false
-	prompt := &survey.Confirm{
+	var wantsExtraFields []string
+	prompt := &survey.MultiSelect{
 		Message: "Would you like to add more information?",
+		Options: []string{
+			"Reviewers",
+			"Assignees",
+			"Labels",
+			"Projects",
+			"Milestone",
+		},
 	}
 	err = survey.AskOne(prompt, &wantsExtraFields)
 	if err != nil {
 		return nil, fmt.Errorf("could not prompt: %w", err)
 	}
 
-	if wantsExtraFields {
-		err = askExtraFields([]string{"Reviewers", "Assignees", "Labels", "Projects", "Milestone"})
+	if len(wantsExtraFields) > 0 {
+		err = askExtraFields(wantsExtraFields)
 		if err != nil {
 			return nil, fmt.Errorf("could not prompt: %w", err)
 		}
