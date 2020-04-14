@@ -6,6 +6,8 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/cli/cli/pkg/githubtemplate"
 	"github.com/cli/cli/pkg/surveyext"
+	"github.com/cli/cli/utils"
+	"github.com/pkg/term"
 	"github.com/spf13/cobra"
 )
 
@@ -28,30 +30,52 @@ var SurveyAsk = func(qs []*survey.Question, response interface{}, opts ...survey
 }
 
 func confirmSubmission() (Action, error) {
-	confirmAnswers := struct {
-		Confirmation int
-	}{}
-	confirmQs := []*survey.Question{
-		{
-			Name: "confirmation",
-			Prompt: &survey.Select{
-				Message: "What's next?",
-				Default: "Submit",
-				Options: []string{
-					"Preview in browser",
-					"Submit",
-					"Cancel",
-				},
-			},
-		},
-	}
+	for {
+		fmt.Printf("%s What's next?  %s\n", utils.Green("?"), utils.Cyan("[Use letters to select]"))
+		fmt.Printf("  %s Submit\n", utils.Green("(Enter)"))
+		fmt.Printf("  %s Cancel\n", utils.Green("  (Esc)"))
+		fmt.Printf("  %s\n", utils.Gray("---"))
+		fmt.Printf("  %s Request reviewers\n", utils.Green("(q)"))
+		fmt.Printf("  %s Assign people\n", utils.Green("(a)"))
+		fmt.Printf("  %s Add labels\n", utils.Green("(l)"))
+		fmt.Printf("  %s Add to projects\n", utils.Green("(p)"))
+		fmt.Printf("  %s Add to milestone\n", utils.Green("(m)"))
 
-	err := SurveyAsk(confirmQs, &confirmAnswers)
-	if err != nil {
-		return -1, fmt.Errorf("could not prompt: %w", err)
-	}
+		t, _ := term.Open("/dev/tty")
+		_ = term.RawMode(t)
+		bytes := make([]byte, 3)
 
-	return Action(confirmAnswers.Confirmation), nil
+		numRead, err := t.Read(bytes)
+		if err != nil {
+			return Action(0), err
+		}
+
+		_ = t.Restore()
+		t.Close()
+
+		fmt.Printf(": %d - %d\n", numRead, int(bytes[0]))
+
+		switch int(bytes[0]) {
+		case 3, 27:
+			return Action(2), nil
+		case 13:
+			return Action(1), nil
+		default:
+			switch rune(bytes[0]) {
+			case 'q':
+				_ = askExtraFields([]string{"Reviewers"})
+			case 'a':
+				_ = askExtraFields([]string{"Assignees"})
+			case 'l':
+				_ = askExtraFields([]string{"Labels"})
+			case 'p':
+				_ = askExtraFields([]string{"Projects"})
+			case 'm':
+				_ = askExtraFields([]string{"Milestone"})
+			}
+		}
+
+	}
 }
 
 func selectTemplate(templatePaths []string) (string, error) {
@@ -135,22 +159,6 @@ func titleBodySurvey(cmd *cobra.Command, providedTitle, providedBody string, def
 
 	if inProgress.Body == "" {
 		inProgress.Body = templateContents
-	}
-
-	wantsExtraFields := false
-	prompt := &survey.Confirm{
-		Message: "Would you like to add more information?",
-	}
-	err = survey.AskOne(prompt, &wantsExtraFields)
-	if err != nil {
-		return nil, fmt.Errorf("could not prompt: %w", err)
-	}
-
-	if wantsExtraFields {
-		err = askExtraFields([]string{"Reviewers", "Assignees", "Labels", "Projects", "Milestone"})
-		if err != nil {
-			return nil, fmt.Errorf("could not prompt: %w", err)
-		}
 	}
 
 	confirmA, err := confirmSubmission()
